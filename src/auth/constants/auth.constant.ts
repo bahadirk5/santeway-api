@@ -1,0 +1,5 @@
+export const JWT_CONSTANTS = {
+  ACCESS_TOKEN_EXPIRY: '15m',
+  REFRESH_TOKEN_EXPIRY: '7d',
+  ACCESS_TOKEN_EXPIRY_SEC: 900 // 15 minutes in seconds
+};
