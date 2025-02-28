@@ -38,7 +38,7 @@ export class UsersService {
       password: hashedPassword,
       firstName,
       lastName,
-      role: role || UserRole.CUSTOMMER,
+      role: role || UserRole.CUSTOMER,
     });
 
     try {

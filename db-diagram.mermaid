@@ -1,0 +1,135 @@
+erDiagram
+    User {
+        int id PK
+        string email UK
+        string password
+        string firstName
+        string lastName
+        enum role "CUSTOMER (default)"
+        boolean isActive "default: true"
+        date createdAt
+        date updatedAt
+    }
+    
+    Address {
+        int id PK
+        int userId FK
+        string addressLine1
+        string addressLine2
+        string city
+        string state
+        string postalCode
+        string country
+        boolean isDefault
+        enum type "SHIPPING, BILLING"
+    }
+    
+    Product {
+        int id PK
+        string name
+        text description
+        decimal price
+        string sku UK
+        int stock "default: 0"
+        int categoryId FK
+        boolean isActive "default: true"
+        date createdAt
+        date updatedAt
+    }
+    
+    Category {
+        int id PK
+        string name
+        string slug UK
+        int parentId FK "nullable"
+        boolean isActive "default: true"
+    }
+    
+    ProductImage {
+        int id PK
+        int productId FK
+        string url
+        int sortOrder "default: 0"
+        boolean isMain "default: false"
+    }
+    
+    Cart {
+        int id PK
+        int userId FK "nullable for guest carts"
+        string sessionId "for guest users"
+        date createdAt
+        date updatedAt
+    }
+    
+    CartItem {
+        int id PK
+        int cartId FK
+        int productId FK
+        int quantity
+        date addedAt
+    }
+    
+    Order {
+        int id PK
+        int userId FK
+        int shippingAddressId FK
+        int billingAddressId FK
+        enum status "PENDING, PROCESSING, SHIPPED, DELIVERED, CANCELLED"
+        decimal totalAmount
+        decimal taxAmount
+        decimal shippingAmount
+        string trackingNumber
+        date createdAt
+        date updatedAt
+    }
+    
+    OrderItem {
+        int id PK
+        int orderId FK
+        int productId FK
+        string productName "name at purchase time"
+        string productSku "sku at purchase time"
+        int quantity
+        decimal unitPrice
+        decimal totalPrice
+    }
+    
+    Payment {
+        int id PK
+        int orderId FK
+        enum method "CREDIT_CARD, PAYPAL, BANK_TRANSFER"
+        enum status "PENDING, COMPLETED, FAILED, REFUNDED"
+        string transactionId
+        decimal amount
+        date paymentDate
+    }
+    
+    Review {
+        int id PK
+        int productId FK
+        int userId FK
+        int rating "1-5"
+        text comment
+        boolean isVerified
+        date createdAt
+    }
+    
+    User ||--o{ Address : "has"
+    User ||--o{ Order : "places"
+    User ||--o{ Review : "writes"
+    User ||--o{ Cart : "has"
+    
+    Product ||--o{ OrderItem : "included in"
+    Product ||--o{ ProductImage : "has"
+    Product ||--o{ Review : "receives"
+    Product }o--|| Category : "belongs to"
+    Product ||--o{ CartItem : "added to"
+    
+    Category ||--o{ Category : "has subcategories"
+    
+    Cart ||--o{ CartItem : "contains"
+    
+    Order ||--o{ OrderItem : "contains"
+    Order ||--|| Address : "ships to"
+    Order ||--|| Address : "bills to"
+    Order ||--o{ Payment : "paid with"
