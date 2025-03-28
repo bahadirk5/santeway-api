@@ -12,6 +12,7 @@ import {
   ParseUUIDPipe,
   UploadedFiles,
   UseInterceptors,
+  Logger,
 } from '@nestjs/common';
 import { ProductsService } from '../services/products.service';
 import { CreateProductDto } from '../dto/create-product.dto';
@@ -21,14 +22,16 @@ import { RolesGuard } from '@/auth/guards/roles.guard';
 import { UserRole } from '@/users/enums/user-roles.enum';
 import { Roles } from '@/auth/decorators/roles.decorator';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { UploadsService } from '@/uploads/uploads.service';
+import { FileUploadService } from '@/uploads/services/file-upload.service';
 
 @Controller('products')
 @UseGuards(RolesGuard)
 export class ProductsController {
+  private readonly logger = new Logger(ProductsController.name);
+
   constructor(
     private readonly productsService: ProductsService,
-    private readonly uploadsService: UploadsService,
+    private readonly fileUploadService: FileUploadService,
   ) {}
 
   @Post()
@@ -39,6 +42,22 @@ export class ProductsController {
     @Body() createProductDto: CreateProductDto,
     @UploadedFiles() files: Express.Multer.File[] = [],
   ) {
+    this.logger.debug('Creating new product with images', {
+      dto: createProductDto,
+      filesCount: files.length,
+    });
+
+    if (files.length > 0) {
+      this.logger.debug(
+        'Files info',
+        files.map((f) => ({
+          originalname: f.originalname,
+          size: f.size,
+          mimetype: f.mimetype,
+        })),
+      );
+    }
+
     return this.productsService.createWithImages(createProductDto, files);
   }
 

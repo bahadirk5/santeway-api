@@ -1,9 +1,5 @@
-export interface FileFilterOptions {
-  mimeTypes: string[];
-  maxSize?: number; // Bytes
-}
-
-export interface UploadOptions {
-  destination: string;
-  fileFilter?: FileFilterOptions;
+export interface IFileUploadService {
+  prepareUploadDestination(destinationPath: string): string;
+  generateUniqueFilename(originalFilename: string): string;
+  validateUploadedFile(file: Express.Multer.File): boolean;
 }

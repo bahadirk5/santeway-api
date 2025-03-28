@@ -11,6 +11,7 @@ import {
   HttpStatus,
   HttpCode,
   ParseUUIDPipe,
+  Logger,
 } from '@nestjs/common';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { ProductImagesService } from '../services/product-images.service';
@@ -18,15 +19,16 @@ import { RolesGuard } from '@/auth/guards/roles.guard';
 import { UserRole } from '@/users/enums/user-roles.enum';
 import { Roles } from '@/auth/decorators/roles.decorator';
 import { Public } from '@/auth/decorators/public.decorator';
-import { UploadsService } from '@/uploads/uploads.service';
-import { join } from 'path';
+import { FileUploadService } from '@/uploads/services/file-upload.service';
 
 @Controller('products/:productId/images')
 @UseGuards(RolesGuard)
 export class ProductImagesController {
+  private readonly logger = new Logger(ProductImagesController.name);
+
   constructor(
     private readonly productImagesService: ProductImagesService,
-    private readonly uploadsService: UploadsService,
+    private readonly fileUploadService: FileUploadService,
   ) {}
 
   @Post()
@@ -37,6 +39,16 @@ export class ProductImagesController {
     @Param('productId', ParseUUIDPipe) productId: string,
     @UploadedFile() file: Express.Multer.File,
   ) {
+    this.logger.debug(`Uploading single image for product ${productId}`);
+
+    if (!file) {
+      this.logger.warn(`No file provided for product ${productId}`);
+    } else {
+      this.logger.debug(
+        `File received: ${file.originalname}, ${file.size} bytes`,
+      );
+    }
+
     return this.productImagesService.createProductImage(productId, file, false);
   }
 
@@ -48,6 +60,14 @@ export class ProductImagesController {
     @Param('productId', ParseUUIDPipe) productId: string,
     @UploadedFiles() files: Express.Multer.File[],
   ) {
+    this.logger.debug(`Uploading multiple images for product ${productId}`);
+
+    if (!files || files.length === 0) {
+      this.logger.warn(`No files provided for product ${productId}`);
+    } else {
+      this.logger.debug(`Received ${files.length} files`);
+    }
+
     return this.productImagesService.createProductImages(productId, files);
   }
 

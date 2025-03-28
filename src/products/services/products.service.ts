@@ -3,16 +3,23 @@ import {
   InternalServerErrorException,
   NotFoundException,
   ConflictException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Product } from '../entities/product.entity';
 import { CreateProductDto } from '../dto/create-product.dto';
-import { Category } from '@/categories/entities/category.entity';
+import { UpdateProductDto } from '../dto/update-product.dto';
+import { Category } from '../../categories/entities/category.entity';
 import { ProductImagesService } from './product-images.service';
 
+/**
+ * Service responsible for product management
+ */
 @Injectable()
 export class ProductsService {
+  private readonly logger = new Logger(ProductsService.name);
+
   constructor(
     @InjectRepository(Product)
     private productsRepository: Repository<Product>,
@@ -21,113 +28,50 @@ export class ProductsService {
     private productImagesService: ProductImagesService,
   ) {}
 
-  // async create(createProductDto: CreateProductDto): Promise<Product> {
-  //   try {
-  //     // Check if product with same SKU exists
-  //     const existingProduct = await this.productsRepository.findOne({
-  //       where: { sku: createProductDto.sku },
-  //     });
-
-  //     if (existingProduct) {
-  //       throw new ConflictException(
-  //         `Product with SKU ${createProductDto.sku} already exists`,
-  //       );
-  //     }
-
-  //     // if (createProductDto.categoryId) {
-  //     //   const category = await this.categoryRepository.findOne({
-  //     //     where: { id: createProductDto.categoryId },
-  //     //   });
-
-  //     //   if (!category) {
-  //     //     throw new NotFoundException(
-  //     //       `Category with ID ${createProductDto.categoryId} not found`,
-  //     //     );
-  //     //   }
-  //     // }
-
-  //     const product = this.productsRepository.create(createProductDto);
-  //     return await this.productsRepository.save(product);
-  //   } catch (error) {
-  //     if (
-  //       error instanceof ConflictException ||
-  //       error instanceof NotFoundException
-  //     ) {
-  //       throw error;
-  //     }
-  //     throw new InternalServerErrorException('Could not create product');
-  //   }
-  // }
-
+  /**
+   * Creates a new product
+   * @param createProductDto Product data
+   * @returns Created Product entity
+   */
   async create(createProductDto: CreateProductDto): Promise<Product> {
     try {
-      console.log('Starting product creation...');
+      this.logger.debug('Creating product', createProductDto);
 
       // Check if product with same SKU exists
-      console.log('Checking for existing SKU:', createProductDto.sku);
       const existingProduct = await this.productsRepository.findOne({
         where: { sku: createProductDto.sku },
       });
 
       if (existingProduct) {
-        console.log('SKU already exists:', createProductDto.sku);
         throw new ConflictException(
           `Product with SKU ${createProductDto.sku} already exists`,
         );
       }
 
-      // Category checking is commented out
+      // Verify category exists if provided
+      if (createProductDto.categoryId) {
+        const category = await this.categoryRepository.findOne({
+          where: { id: createProductDto.categoryId },
+        });
 
-      // Log the DTO before creating the entity
-      console.log(
-        'DTO before creating entity:',
-        JSON.stringify(createProductDto, null, 2),
-      );
-
-      // Try to create the repository entity
-      let product;
-      try {
-        console.log('Creating product entity');
-        product = this.productsRepository.create(createProductDto);
-        console.log('Product entity created successfully:', product);
-      } catch (entityError) {
-        console.error('Error creating entity:', entityError);
-        throw entityError;
+        if (!category) {
+          throw new NotFoundException(
+            `Category with ID ${createProductDto.categoryId} not found`,
+          );
+        }
       }
 
-      // Try to save to database
-      try {
-        console.log('Saving product to database');
-        const savedProduct = await this.productsRepository.save(product);
-        console.log('Product saved successfully:', savedProduct);
-        return savedProduct;
-      } catch (dbError) {
-        console.error('Database save error:', dbError);
-        // Log additional details about the error
-        if (dbError.code) {
-          console.error('DB Error Code:', dbError.code);
-        }
-        if (dbError.detail) {
-          console.error('DB Error Detail:', dbError.detail);
-        }
-        if (dbError.constraint) {
-          console.error('DB Constraint:', dbError.constraint);
-        }
-        if (dbError.parameters) {
-          console.error('DB Parameters:', dbError.parameters);
-        }
-        if (dbError.query) {
-          console.error('DB Query:', dbError.query);
-        }
-        throw dbError;
-      }
+      // Create and save product
+      const product = this.productsRepository.create(createProductDto);
+      const savedProduct = await this.productsRepository.save(product);
+
+      this.logger.debug('Product created successfully', {
+        id: savedProduct.id,
+      });
+
+      return savedProduct;
     } catch (error) {
-      console.error('Error in create product:', error);
-
-      // Log the full error and stack trace
-      console.error('Error type:', error.constructor.name);
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
+      this.logger.error('Failed to create product:', error.stack);
 
       if (
         error instanceof ConflictException ||
@@ -135,45 +79,66 @@ export class ProductsService {
       ) {
         throw error;
       }
-      // Pass the original error message to make debugging easier
+
       throw new InternalServerErrorException(
         `Could not create product: ${error.message}`,
       );
     }
   }
 
-  // Yeni metot: Ürün oluştur ve resimlerini yükle
+  /**
+   * Creates a product and uploads product images
+   * @param createProductDto Product data
+   * @param files Uploaded image files
+   * @returns Created Product entity with images
+   */
   async createWithImages(
     createProductDto: CreateProductDto,
     files: Express.Multer.File[],
   ): Promise<Product> {
     try {
-      // Debug log
-      console.log('Creating product with data:', createProductDto);
-      console.log('Files received:', files.length);
+      this.logger.debug('Creating product with images', {
+        productData: createProductDto,
+        filesCount: files.length,
+      });
 
-      // Önce ürünü oluştur
+      // First create the product
       const product = await this.create(createProductDto);
-      console.log('Product created:', product.id);
+      this.logger.debug('Product created successfully', { id: product.id });
 
-      // Resim varsa, resimleri yükle
+      // Upload images if provided
       if (files && files.length > 0) {
-        console.log('Uploading images for product:', product.id);
-        await this.productImagesService.createProductImages(product.id, files);
-        console.log('Images uploaded successfully');
+        this.logger.debug(
+          `Uploading ${files.length} images for product ${product.id}`,
+        );
+
+        try {
+          await this.productImagesService.createProductImages(
+            product.id,
+            files,
+          );
+          this.logger.debug('Images uploaded successfully');
+        } catch (imageError) {
+          this.logger.error(
+            'Failed to upload images, but product was created:',
+            imageError.stack,
+          );
+          // Product was created but images failed - we'll still return the product
+        }
       }
 
-      // Resimleriyle birlikte ürünü getir
+      // Return the product with images
       return await this.findOne(product.id);
     } catch (error) {
-      console.error('Error in createWithImages:', error);
-      if (error instanceof Error) {
-        console.error(error.stack); // Stack trace yazdır
-      }
-      throw error;
+      this.logger.error('Failed to create product with images:', error.stack);
+      throw error; // Re-throw to maintain the original error
     }
   }
 
+  /**
+   * Retrieves all products
+   * @returns Array of Product entities
+   */
   async findAll(): Promise<Product[]> {
     try {
       return await this.productsRepository.find({
@@ -181,10 +146,16 @@ export class ProductsService {
         relations: ['images'],
       });
     } catch (error) {
+      this.logger.error('Failed to fetch products:', error.stack);
       throw new InternalServerErrorException('Could not fetch products');
     }
   }
 
+  /**
+   * Retrieves a single product by ID
+   * @param id Product UUID
+   * @returns Product entity
+   */
   async findOne(id: string): Promise<Product> {
     try {
       const product = await this.productsRepository.findOne({
@@ -198,16 +169,25 @@ export class ProductsService {
 
       return product;
     } catch (error) {
+      this.logger.error(`Failed to fetch product ${id}:`, error.stack);
+
       if (error instanceof NotFoundException) {
         throw error;
       }
+
       throw new InternalServerErrorException(`Could not fetch product ${id}`);
     }
   }
 
+  /**
+   * Updates a product
+   * @param id Product UUID
+   * @param updateProductDto Product data to update
+   * @returns Updated Product entity
+   */
   async update(
     id: string,
-    updateProductDto: Partial<CreateProductDto>,
+    updateProductDto: UpdateProductDto,
   ): Promise<Product> {
     try {
       // First check if product exists
@@ -218,6 +198,7 @@ export class ProductsService {
         const existingProduct = await this.productsRepository.findOne({
           where: { sku: updateProductDto.sku },
         });
+
         if (existingProduct && existingProduct.id !== id) {
           throw new ConflictException(
             `Product with SKU ${updateProductDto.sku} already exists`,
@@ -225,6 +206,7 @@ export class ProductsService {
         }
       }
 
+      // Check if category exists if updating category
       if (updateProductDto.categoryId) {
         const category = await this.categoryRepository.findOne({
           where: { id: updateProductDto.categoryId },
@@ -237,28 +219,44 @@ export class ProductsService {
         }
       }
 
+      // Update and save
       Object.assign(product, updateProductDto);
       return await this.productsRepository.save(product);
     } catch (error) {
+      this.logger.error(`Failed to update product ${id}:`, error.stack);
+
       if (
         error instanceof NotFoundException ||
         error instanceof ConflictException
       ) {
         throw error;
       }
-      throw new InternalServerErrorException(`Could not update product ${id}`);
+
+      throw new InternalServerErrorException(
+        `Could not update product ${id}: ${error.message}`,
+      );
     }
   }
 
+  /**
+   * Removes a product
+   * @param id Product UUID
+   */
   async remove(id: string): Promise<void> {
     try {
       const product = await this.findOne(id);
       await this.productsRepository.remove(product);
+      this.logger.debug(`Product ${id} deleted successfully`);
     } catch (error) {
+      this.logger.error(`Failed to delete product ${id}:`, error.stack);
+
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new InternalServerErrorException(`Could not delete product ${id}`);
+
+      throw new InternalServerErrorException(
+        `Could not delete product ${id}: ${error.message}`,
+      );
     }
   }
 }
